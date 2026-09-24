@@ -1,108 +1,395 @@
-// State & Navigation Controller
-(function() {
-  'use strict';
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>24H — Shanghai Trip 🇨🇳</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
 
-  const state = {
-    currentHour: 10,
-    selectedHour: 10,
-    currentTab: 'today',
-    daySubTab: 'personal',
-    friends: [],
-    hours: [],
-    userPhotos: {},
-    countdownSeconds: 23 * 60 + 41,
-    cameraStream: null,
-    facingMode: 'environment',
-    capturedTempPhoto: null,
-    recap: {
-      active: false,
-      mode: 'normal',
-      items: [],
-      currentIndex: 0,
-      timer: null,
-      audioPlaying: false,
-      isPaused: false
-    }
-  };
+  <!-- Desktop Presentation Stage (Wraps the 390x844px Mobile Viewport) -->
+  <div class="desktop-stage">
 
-  // Audio Synthesizer (Zero MP3 Dependencies)
-  let audioCtx = null;
-  function getAudioContext() {
-    if (!audioCtx) {
-      const AudioContext = window.AudioContext || window.webkitAudioContext;
-      if (AudioContext) audioCtx = new AudioContext();
-    }
-    if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
-    return audioCtx;
-  }
+    <div class="stage-header">
+      <div class="stage-title">
+        <span class="stage-badge">24H MOBILE WEB</span>
+        <span>Shanghai Trip 🇨🇳</span>
+      </div>
+      <div class="stage-controls">
+        <button id="btnToggleFullscreen" class="btn-ctrl" title="Toggle Bezel">🖥️ Fill Screen</button>
+        <button id="btnResetData" class="btn-ctrl" title="Reset Demo">🔄 Reset</button>
+      </div>
+    </div>
 
-  function playShutterSound() {
-    const ctx = getAudioContext();
-    if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(800, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.5, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.08);
-  }
+    <!-- Phone Chassis Frame -->
+    <div class="phone-frame">
 
-  // Camera Management & WebRTC
-  async function openCameraModal() {
-    const modal = document.getElementById('cameraModal');
-    const video = document.getElementById('cameraVideo');
-    if (modal) modal.classList.add('active');
+      <!-- iOS Status Bar & Dynamic Island -->
+      <div class="phone-status-bar">
+        <span style="font-weight: 700; font-size: 13px;">9:41</span>
+        <div class="dynamic-island">
+          <div class="dynamic-island-cam"></div>
+          <div class="dynamic-island-sensor"></div>
+        </div>
+        <div class="status-right">
+          <span>5G</span>
+          <span>100%</span>
+        </div>
+      </div>
 
-    try {
-      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        state.cameraStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: state.facingMode, width: { ideal: 1080 }, height: { ideal: 1920 } },
-          audio: false
-        });
-        if (video) {
-          video.srcObject = state.cameraStream;
-          video.play();
-        }
-      }
-    } catch (err) {
-      console.warn("Camera fallback active (file upload / preset snaps):", err);
-    }
-  }
+      <!-- Quick Simulator & Time-Travel Bar -->
+      <div class="sim-bar">
+        <div class="sim-label">
+          <span>⚡ SIMULATOR:</span>
+        </div>
+        <select id="simSelectHour" class="sim-select">
+          <option value="9">09:00 AM — Morning (Completed)</option>
+          <option value="10" selected>10:00 AM — Active (Pending 5/6)</option>
+          <option value="12">12:00 PM — Eating Xiaolongbao 🥟</option>
+          <option value="14">14:00 PM — Yu Garden Lanterns 🏮</option>
+          <option value="18">18:00 PM — Bund Sunset Golden Hour 🌆</option>
+          <option value="20">20:00 PM — 0.5x Friends Group Selfie 👯</option>
+          <option value="21">21:00 PM — Xintiandi Chaos 🔥</option>
+          <option value="23">23:00 PM — Last Photo of the Day 🌙</option>
+        </select>
+      </div>
 
-  // Submit Photo & Reveal Grid
-  function submitPhoto() {
-    const hObj = state.hours[state.selectedHour];
-    const timestamp = `${String(hObj.hour).padStart(2, '0')}:14 ${hObj.hour < 12 ? 'AM' : 'PM'}`;
-    state.userPhotos[state.selectedHour] = {
-      photoUrl: state.capturedTempPhoto,
-      timestamp,
-      caption: "Our 24H photo in Shanghai!"
-    };
-    if (hObj.submissions.auau) {
-      hObj.submissions.auau.submitted = true;
-      hObj.submissions.auau.photoUrl = state.capturedTempPhoto;
-      hObj.submissions.auau.timestamp = timestamp;
-    }
-    localStorage.setItem('24h_user_photos', JSON.stringify(state.userPhotos));
-    triggerConfetti();
-    document.getElementById('photoReviewModal').classList.remove('active');
-    document.getElementById('celebrationOverlay').classList.add('active');
-  }
+      <!-- Toast Notification Bubble -->
+      <div id="toastMsg" class="toast-msg">Notification message</div>
 
-  // TikTok/Reels Recap Player
-  function startRecapPlayer(mode = 'normal') {
-    state.recap.mode = mode;
-    state.recap.active = true;
-    state.recap.currentIndex = 0;
-    // Build slide queue from all submitted hours & friends...
-    document.getElementById('videoPlayerModal').classList.add('active');
-    showRecapSlide(0);
-  }
+      <!-- HTML5 Canvas for Confetti -->
+      <canvas id="confettiCanvas"></canvas>
 
-  // (Listeners, timeline nodes, and DOM binding omitted for brevity; see zip for complete file)
-})();
+      <!-- SCREEN 1: TODAY (GROUP HOME) -->
+      <div id="screen-today" class="app-screen active">
+        <header class="app-header">
+          <div class="trip-meta">
+            <h1 class="trip-title">Shanghai Trip 🇨🇳</h1>
+            <div id="tripSubMeta" class="trip-sub">
+              <span class="live-dot"></span> 6 friends · Day 1
+            </div>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn" onclick="alert('Trip: Shanghai, China\nDuration: 24 Hours\nFriends: Auau, Bam, Chainer, Din, Porjai, Lin\nCode: SHANG24')" title="Trip Info">ℹ️</button>
+          </div>
+        </header>
+
+        <!-- 24-Hour Progress Ring / Timeline Scrubber -->
+        <section class="timeline-section">
+          <div class="timeline-header">
+            <span class="timeline-label">24-Hour Progress</span>
+            <span class="timeline-stats">Hourly Milestones</span>
+          </div>
+          <div id="timelineScroll" class="timeline-scroll"></div>
+        </section>
+
+        <!-- Next Photo Hero Card -->
+        <section class="challenge-hero-card">
+          <div class="hero-glow-blob"></div>
+          <div class="card-top-tag">
+            <span id="heroHourTag" class="tag-pill">NEXT PHOTO</span>
+            <div class="countdown-box">
+              <span>⏱️</span>
+              <span id="liveCountdown">23:41</span>
+            </div>
+          </div>
+
+          <div id="promptTime" class="prompt-time">10:00 AM</div>
+          <div id="promptTitle" class="prompt-text">“What are you doing right now?” 📸</div>
+          <div id="promptLoc" class="prompt-loc">📍 Nanjing Road Pedestrian Mall · Shanghai</div>
+
+          <button id="btnTakePhoto" class="btn-take-photo">
+            <span>TAKE PHOTO 📸</span>
+          </button>
+        </section>
+
+        <!-- Friends Submission Status Row -->
+        <section class="friends-submission-section">
+          <div class="friends-header">
+            <span class="friends-title">FRIENDS</span>
+            <span id="friendsCountBadge" class="friends-count-badge">5 / 6 submitted</span>
+          </div>
+          <div id="friendsAvatarRow" class="friends-avatar-row"></div>
+        </section>
+
+        <!-- Group Photo Reveal ("REVEAL TOGETHER") -->
+        <section class="reveal-section">
+          <div class="reveal-card">
+            <div id="revealLockCover" class="reveal-lock-cover" style="display: none;">
+              <div class="lock-icon-disc">🔒</div>
+              <div class="lock-title">Reveal Together</div>
+              <div class="lock-desc">Nobody can see another person's photo until you submit yours for this hour!</div>
+              <button id="btnQuickSubmitUnlock" class="btn-take-photo" style="height: 48px; font-size: 14px; max-width: 220px;">
+                Snap & Unlock 🔓
+              </button>
+            </div>
+
+            <div class="reveal-header">
+              <div class="reveal-badge">
+                <span>⚡</span>
+                <span id="revealHourTitle">10:00 AM Group Reveal</span>
+              </div>
+              <span style="font-size: 12px; color: var(--text-secondary);">Simultaneous View</span>
+            </div>
+
+            <div id="revealGrid" class="reveal-grid"></div>
+          </div>
+        </section>
+      </div>
+
+      <!-- SCREEN 2 / TAB 2: DAY TIMELINE -->
+      <div id="screen-day" class="app-screen">
+        <header class="app-header">
+          <div class="trip-meta">
+            <h1 class="trip-title">Trip Timeline 📸</h1>
+            <div class="trip-sub">24-Hour Visual Diary</div>
+          </div>
+        </header>
+
+        <div class="day-toggle-bar">
+          <div class="segmented-control">
+            <button id="segPersonal" class="segment-btn active">My 24 Hours (4×6)</button>
+            <button id="segGroup" class="segment-btn">Group Feed</button>
+          </div>
+        </div>
+
+        <div id="grid4x6Container" class="grid-4x6-container"></div>
+        <div id="groupFeedContainer" class="group-feed-container" style="display: none;"></div>
+      </div>
+
+      <!-- SCREEN 3 / TAB 3: FRIENDS HUB -->
+      <div id="screen-group" class="app-screen">
+        <header class="app-header">
+          <div class="trip-meta">
+            <h1 class="trip-title">Trip Crew 👥</h1>
+            <div class="trip-sub">Shanghai Expedition 🇨🇳</div>
+          </div>
+        </header>
+
+        <div class="friends-page-container">
+          <div class="invite-box">
+            <div class="invite-top">
+              <span style="font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--coral); text-transform: uppercase;">INVITE TRIP MATES</span>
+              <button id="btnCopyCode" class="btn-copy-code">Copy Code</button>
+            </div>
+            <div class="invite-code-pill">SHANG24</div>
+            <div class="invite-sub">Anyone with this code can join the Shanghai 24-hour challenge.</div>
+            <div class="invite-actions-row">
+              <button id="btnInviteLink" class="btn-invite-link">🔗 Share Invite Link</button>
+              <button id="btnSimulateJoin" class="btn-simulate-join">+ Simulate Join</button>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">
+              MEMBERS (6)
+            </div>
+            <div id="membersList" class="members-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- SCREEN 4 / TAB 4: RECAP & CHAOS CUT -->
+      <div id="screen-recap" class="app-screen">
+        <header class="app-header">
+          <div class="trip-meta">
+            <h1 class="trip-title">Trip Memories 🎬</h1>
+            <div class="trip-sub">Day 1 Recap Experience</div>
+          </div>
+        </header>
+
+        <div class="recap-screen-container">
+          <div class="recap-hero-banner">
+            <div style="font-size: 40px; margin-bottom: 6px;">🎉</div>
+            <h2 class="recap-hero-title">YOU MADE IT!</h2>
+            <div class="recap-hero-sub">Shanghai Trip 🇨🇳</div>
+            <div class="recap-stats-ribbon">
+              <span><b>24</b> Hours</span>
+              <span>•</span>
+              <span><b>6</b> Friends</span>
+              <span>•</span>
+              <span><b>144</b> Photos</span>
+            </div>
+          </div>
+
+          <div class="recap-actions-box">
+            <button id="btnCreateRecap" class="btn-create-recap">
+              <span>CREATE RECAP 🎬</span>
+            </button>
+            <button id="btnChaosCut" class="btn-chaos-cut">
+              <span>MAKE CHAOS CUT 😂</span>
+            </button>
+          </div>
+
+          <div>
+            <div style="font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--text-muted); text-transform: uppercase; margin-bottom: 10px;">
+              TODAY'S HIGHLIGHTS
+            </div>
+            <div id="recapPreviewGrid" class="recap-preview-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- REELS / TIKTOK 9:16 VERTICAL VIDEO PLAYER MODAL -->
+      <div id="videoPlayerModal" class="video-player-modal">
+        <div id="storiesProgressBar" class="stories-progress-bar"></div>
+
+        <div class="video-top-controls">
+          <div class="video-author-badge">
+            <span id="videoAuthorAvatar" class="author-mini-avatar">👦🏻</span>
+            <span id="videoAuthorName" class="author-mini-name">Auau's perspective</span>
+          </div>
+          <div class="video-top-btns">
+            <button id="btnRecapMute" class="video-action-icon" title="Toggle Music">🔊</button>
+            <button id="btnRecapClose" class="video-action-icon" title="Close Video">✕</button>
+          </div>
+        </div>
+
+        <div class="video-viewport">
+          <img id="videoPhotoImg" class="video-photo-img ken-burns" src="" alt="Recap Slide" />
+
+          <div class="video-tap-zones">
+            <div id="videoTapLeft" class="tap-zone-left" title="Tap for Previous"></div>
+            <div id="videoTapRight" class="tap-zone-right" title="Tap for Next"></div>
+          </div>
+
+          <div class="video-overlays">
+            <div id="videoTimestampBadge" class="video-timestamp-badge">10:00 AM · The Bund</div>
+            <div id="videoPromptCaption" class="video-prompt-caption">“What are you doing right now?”</div>
+            <div id="videoNoteCaption" class="video-note-caption">Shanghai Trip 🇨🇳 · 24H Challenge</div>
+          </div>
+
+          <div id="videoFinalCard" class="video-final-card">
+            <div class="final-card-flag">🇨🇳</div>
+            <div class="final-card-title">
+              SHANGHAI TRIP<br />
+              24 HOURS<br />
+              6 FRIENDS<br />
+              ONE DAY
+            </div>
+            <div class="final-card-stats">144 PHOTOS · SEPTEMBER 2026</div>
+            <div style="display: flex; gap: 10px; width: 100%; max-width: 280px;">
+              <button id="btnReplayRecap" class="btn-ctrl" style="flex:1; justify-content:center; height:44px; font-weight:800; font-size:14px; background:white; color:black;">
+                ↺ Replay
+              </button>
+              <button id="btnShareRecap" class="btn-ctrl" style="flex:1; justify-content:center; height:44px; font-weight:800; font-size:14px; background:var(--coral); color:white; border:none;">
+                📤 Share
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CAMERA MODAL (Full Viewfinder) -->
+      <div id="cameraModal" class="camera-modal">
+        <div class="camera-header">
+          <div id="cameraPromptBadge" class="camera-prompt-badge">10:00 AM · Take Photo 📸</div>
+          <button id="btnCameraClose" class="camera-close-btn">✕</button>
+        </div>
+
+        <div class="camera-viewfinder-container">
+          <video id="cameraVideo" autoplay playsinline muted></video>
+          <canvas id="capturedCanvas"></canvas>
+          <div id="cameraFlash" class="camera-shutter-flash"></div>
+
+          <!-- Quick Shanghai Sample Snaps Bar -->
+          <div class="demo-snaps-row">
+            <div class="demo-snap-chip" data-url="https://images.unsplash.com/photo-1563245372-f21724e3856d?auto=format&fit=crop&w=800&q=80">
+              🥟 Xiaolongbao
+            </div>
+            <div class="demo-snap-chip" data-url="https://images.unsplash.com/photo-1548919973-5cef591cdbc9?auto=format&fit=crop&w=800&q=80">
+              🏙️ The Bund Skyline
+            </div>
+            <div class="demo-snap-chip" data-url="https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80">
+              🏮 Yu Garden
+            </div>
+            <div class="demo-snap-chip" data-url="https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?auto=format&fit=crop&w=800&q=80">
+              ☕ Cafe Concession
+            </div>
+            <div class="demo-snap-chip" data-url="https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=800&q=80">
+              🤳 Crew Selfie
+            </div>
+          </div>
+        </div>
+
+        <div class="camera-bottom-controls">
+          <button id="btnCameraRoll" class="camera-btn-circle" title="Upload from Camera Roll">📁</button>
+          <input type="file" id="fileUploadInput" accept="image/*" style="display: none;" />
+
+          <div id="shutterBtn" class="shutter-btn-outer" title="Capture Photo">
+            <div class="shutter-btn-inner"></div>
+          </div>
+
+          <button id="btnFlipCamera" class="camera-btn-circle" title="Flip Camera">🔄</button>
+        </div>
+      </div>
+
+      <!-- PHOTO PREVIEW & REVIEW MODAL -->
+      <div id="photoReviewModal" class="photo-review-modal">
+        <div class="review-preview-box">
+          <img id="reviewPhotoImg" class="review-photo-img" src="" alt="Review Photo" />
+          <div class="review-watermark">
+            <div id="reviewTimeText" class="review-watermark-time">10:14 AM · SHANGHAI, CN 📍</div>
+            <div id="reviewLocText" class="review-watermark-loc">“What are you doing right now?” · 24H Challenge</div>
+          </div>
+        </div>
+        <div class="review-actions-bar">
+          <button id="btnRetake" class="btn-retake">RETAKE ↺</button>
+          <button id="btnUsePhoto" class="btn-use-photo">USE PHOTO ✓</button>
+        </div>
+      </div>
+
+      <!-- SUCCESS CELEBRATION OVERLAY -->
+      <div id="celebrationOverlay" class="celebration-overlay">
+        <div class="celeb-badge-icon">✓</div>
+        <div id="celebTitle" class="celeb-title">10:00 COMPLETE ✓</div>
+        <div id="celebSub" class="celeb-sub">6 / 6 friends have submitted! Photo unlocked for the group.</div>
+        <button id="btnBackTimeline" class="btn-back-timeline">View Group Reveal 🔓</button>
+      </div>
+
+      <!-- LIGHTBOX PHOTO MODAL -->
+      <div id="lightboxModal" class="lightbox-modal">
+        <div class="lightbox-header">
+          <div id="lightboxAuthor" style="font-weight: 800; font-size: 15px;">Friend's Photo</div>
+          <button id="btnLightboxClose" class="lightbox-close-btn">✕</button>
+        </div>
+        <div class="lightbox-content">
+          <img id="lightboxImg" class="lightbox-img" src="" alt="Full view" />
+        </div>
+        <div class="lightbox-footer">
+          <div id="lightboxTime" style="font-size: 12px; color: var(--yellow); font-family: monospace;">10:14 AM · Shanghai</div>
+          <div id="lightboxPrompt" style="font-size: 14px; font-weight: 700; color: white;">“Prompt and caption”</div>
+          <div id="lightboxReactionsRow" class="lightbox-reactions-row"></div>
+        </div>
+      </div>
+
+      <!-- BOTTOM NAVIGATION BAR (4 TABS) -->
+      <nav class="bottom-nav">
+        <button class="nav-tab active" data-tab="today">
+          <span class="tab-icon">🏠</span>
+          <span class="tab-label">Today</span>
+        </button>
+        <button class="nav-tab" data-tab="day">
+          <span class="tab-icon">📸</span>
+          <span class="tab-label">Day</span>
+        </button>
+        <button class="nav-tab" data-tab="group">
+          <span class="tab-icon">👥</span>
+          <span class="tab-label">Group</span>
+        </button>
+        <button class="nav-tab" data-tab="recap">
+          <span class="tab-icon">🎬</span>
+          <span class="tab-label">Recap</span>
+        </button>
+      </nav>
+
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
